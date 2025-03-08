@@ -39,9 +39,9 @@ ENEMY_TYPES = ["fly", "spider", "pooter", "charger"]
 
 DEVIL_ITEMS = [
     ("pacte_sang", "Dégâts x2, -2 Coeurs"),
-    ("brimstone", "Laser Démoniaque, -4 Coeurs"),
+    ("brimstone", "Laser Démoniaque, -3 Coeurs"),
     ("abaddon", "Vitesse et Dégâts ++, -2 Coeurs"),
-    ("pentagram", "Tous Stats ++, -1 Coeur")
+    ("pentagram", "Toutes Stats ++, -1 Coeur")
 ]
 
 ANGEL_ITEMS = [
@@ -84,9 +84,9 @@ class Isaac:
         self.size = 25
         self.health = 6  # 3 coeurs, 1 = un demi coeur
         self.max_health = 6
-        self.damage = 3.5
-        self.fire_rate = 1.0
-        self.speed = 4
+        self.damage = 4
+        self.fire_rate = 0.5
+        self.speed = 3
         self.tears = []
         self.shoot_delay = 15
         self.shoot_timer = 0
@@ -114,6 +114,11 @@ class Isaac:
         self.regen_timer = 0  
         self.laser_direction = (1, 0)
         self.shooting = False 
+        self.dx = 0
+        self.dy = 0
+        self.dash_cooldown = 0
+        self.dash_duration = 10  # Frames
+        self.is_dashing = False
 
     def draw(self):
         # Draw Isaac 
@@ -226,6 +231,41 @@ class Isaac:
             self.invincibility_frames -= 1
         if self.shoot_timer > 0:
             self.shoot_timer -= 1
+        if self.dash_cooldown > 0:
+            self.dash_cooldown -= 1
+        keys = pygame.key.get_pressed()
+
+        # Reset vitesse
+        self.dx, self.dy = 0, 0
+
+        # Update vitesse modifier pour clavier azerty
+        if keys[pygame.K_a]: self.dx = -1 
+        if keys[pygame.K_d]: self.dx = 1 
+        if keys[pygame.K_w]: self.dy = -1
+        if keys[pygame.K_s]: self.dy = 1 
+        # Normaliser vitesse diagonale
+        if self.dx != 0 and self.dy != 0:
+            self.dx *= 0.7071  
+            self.dy *= 0.7071
+
+        # Dash 
+        if keys[pygame.K_SPACE] and self.dash_cooldown == 0:
+            self.is_dashing = True
+            self.dash_cooldown = 60  # 1 seconde
+
+        if self.is_dashing:
+            self.x += self.dx * 10
+            self.y += self.dy * 10
+            self.dash_duration -= 1
+            if self.dash_duration <= 0:
+                self.is_dashing = False
+                self.dash_duration = 5  # Reset temps dash
+
+        # Mouvements normaux
+        if not self.is_dashing:
+            self.x += self.dx * self.speed
+            self.y += self.dy * self.speed
+
 
         # Update laser degats que si tir
         if self.laser and self.shooting:
@@ -534,11 +574,13 @@ class Floor:
         self.room_count = random.randint(8, 12)
         self.current_position = (0, 0)
         self.boss_defeated = False
+        self.visited_rooms = set()
         self.generate_floor()
 
     def generate_floor(self):
         # romm dans laquelle isaac spawn au debut du jeu et de chaque etage
         self.rooms[(0, 0)] = Room("start", self.level)
+        self.visited_rooms.add((0, 0))
 
         # Genere ttes les positions
         positions = []
@@ -720,9 +762,18 @@ class Room:
         
         if room_type == "devil":
             selected = random.sample(DEVIL_ITEMS, 2)
-            for item, desc in selected:
+            for item_info in selected:
+                item, desc = item_info
                 self.items.append(item)
-                self.prices.append(2)  # Cout en coeur
+                #prix correct selon l'objet
+                if item == "pacte_sang":
+                    self.prices.append(2)  # 2 cours (4 points de vie)
+                elif item == "brimstone":
+                    self.prices.append(3)   # 3 coeurs (6 points)
+                elif item == "abaddon":
+                    self.prices.append(2)
+                elif item == "pentagram":
+                    self.prices.append(1) 
         elif room_type == "angel":
             selected = random.sample(ANGEL_ITEMS, 2)
             for item in selected:
@@ -835,6 +886,7 @@ class Game:
         new_pos = (self.floor.current_position[0] + dx, self.floor.current_position[1] + dy)
         if new_pos in self.floor.rooms:
             self.floor.current_position = new_pos
+            self.floor.visited_rooms.add(new_pos)
             if direction == "top": isaac.y = HEIGHT - 100
             elif direction == "bottom": isaac.y = 100
             elif direction == "left": isaac.x = WIDTH - 100
@@ -857,27 +909,51 @@ class Game:
         pygame.display.flip()
 
     def draw_minimap(self):
-        #tout le blabla de la minimap, facile a comprendre
         map_size = 10
-        for pos, room in self.floor.rooms.items():
+        # Afficher toutes les salles visitées + adjacentes
+        visible_positions = set()
+        for pos in self.floor.visited_rooms:
+            visible_positions.add(pos)
+            # Ajouter les salles adjacentes
+            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                adjacent_pos = (pos[0] + dx, pos[1] + dy)
+                if adjacent_pos in self.floor.rooms:
+                    visible_positions.add(adjacent_pos)
+
+        # Dessiner toutes les salles visibles
+        for pos in visible_positions:
+            room = self.floor.rooms.get(pos)
+            if not room:
+                continue
+                
             x, y = pos
             map_x = WIDTH - 120 + (x * 15)
-            map_y = 100 + (y * 15) 
+            map_y = 100 + (y * 15)
             
-            color = WHITE if pos == self.floor.current_position else (50, 50, 50)
+            # Couleur de base
+            if pos == self.floor.current_position:
+                color = WHITE
+            elif pos in self.floor.visited_rooms:
+                color = (50, 50, 50)  # Salle visitée
+            else:
+                color = (150, 150, 150)  # Salle non visitée mais adjacente
+            
             pygame.draw.rect(screen, color, (map_x, map_y, map_size, map_size))
 
-            if room.type == "boss":
-                pygame.draw.circle(screen, RED, (map_x + map_size//2, map_y + map_size//2), 3)
-            elif room.type == "shop":
-                pygame.draw.circle(screen, YELLOW, (map_x + map_size//2, map_y + map_size//2), 3)
-            elif room.type == "treasure":
-                pygame.draw.circle(screen, BLUE, (map_x + map_size//2, map_y + map_size//2), 3)
-            elif room.type == "devil":
-                pygame.draw.circle(screen, (128, 0, 128), (map_x + map_size//2, map_y + map_size//2), 3)  
-            elif room.type == "angel":
-                pygame.draw.circle(screen, (0, 0, 255), (map_x + map_size//2, map_y + map_size//2), 3) 
-
+            # Dessiner les icônes spéciales même pour les salles non visitées
+            if room.type in ["boss", "shop", "treasure", "devil", "angel"]:
+                icon_color = color if pos in self.floor.visited_rooms else (150, 150, 150)  # Gris si non visitée
+                
+                if room.type == "boss":
+                    pygame.draw.circle(screen, (190, 0, 0), (map_x + map_size//2, map_y + map_size//2), 3)
+                elif room.type == "shop":
+                    pygame.draw.circle(screen, (200, 200, 0), (map_x + map_size//2, map_y + map_size//2), 3)  # Jaune foncé
+                elif room.type == "treasure":
+                    pygame.draw.circle(screen, (0, 0, 200), (map_x + map_size//2, map_y + map_size//2), 3)  # Bleu foncé
+                elif room.type == "devil":
+                    pygame.draw.circle(screen, (100, 0, 100), (map_x + map_size//2, map_y + map_size//2), 3)  # Violet foncé
+                elif room.type == "angel":
+                    pygame.draw.circle(screen, (0, 0, 100), (map_x + map_size//2, map_y + map_size//2), 3)  # Bleu nuit
 
 
 def main():
@@ -929,6 +1005,7 @@ def main():
                     CHEATS_ENABLED = not CHEATS_ENABLED
                 elif CHEATS_ENABLED:
                     if event.key == pygame.K_KP1 or event.key == pygame.K_1:
+                        isaac.max_health += 1
                         isaac.health = isaac.max_health
                     if event.key == pygame.K_KP2 or event.key == pygame.K_2:
                         isaac.damage += 5
@@ -951,10 +1028,6 @@ def main():
 
         # keybinds (a modifier pr les claviers azerty bande de losers)
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_a]: isaac.x -= isaac.speed
-        if keys[pygame.K_d]: isaac.x += isaac.speed
-        if keys[pygame.K_w]: isaac.y -= isaac.speed
-        if keys[pygame.K_s]: isaac.y += isaac.speed
 
         # murs collisions
         isaac.check_wall_collision(current_room)
@@ -968,7 +1041,7 @@ def main():
         for particle in current_room.particles:
             particle.draw()
 
-        # TIR NE PAS MODIFIER JAI AUSSI SAIGNER ICI 
+        # TIR NE PAS MODIFIER
         isaac.shooting = False  # Reset tirs
 
         if keys[pygame.K_LEFT] or keys[pygame.K_RIGHT] or keys[pygame.K_UP] or keys[pygame.K_DOWN]:
@@ -1129,29 +1202,31 @@ def main():
                 y = HEIGHT // 2
 
                 if math.dist((isaac.x, isaac.y), (x, y)) < 30:
-                    if current_room.type == "devil" and isaac.health > price * 2:
-                        isaac.health -= price * 2
-                        if item == "pacte_sang":
-                            isaac.damage *= 1.5
-                            isaac.pickup_text = "Dégâts x1.5!"
-                        elif item == "abaddon":
-                            isaac.speed += 1
-                            isaac.damage += 2
-                            isaac.pickup_text = "Vitesse et Dégâts ++!"
-                        elif item == "pentagram":
-                            isaac.damage += 2
-                            isaac.speed += 1
-                            isaac.fire_rate += 0.2
-                            isaac.pickup_text = "Tous Stats ++!"
-                    elif current_room.type == "devil" and isaac.health > price * 4:
-                        if item == "brimstone":
-                            isaac.tears = []  
-                            isaac.laser = True 
-                            isaac.pickup_text = "Laser Démoniaque!" 
-                        current_room.items.pop(i)
-                        current_room.prices.pop(i)
-                        isaac.pickup_timer = 60 
-                        break 
+                    if current_room.type == "devil":
+                        required_health = price * 2  # Convertir les cœurs en points de vie
+                        if isaac.health >= required_health:
+                            isaac.health -= required_health
+                            # Appliquer l'effet de l'objet
+                            if item == "pacte_sang":
+                                isaac.damage *= 1.5
+                                isaac.pickup_text = "Dégats x1.5!"
+                            elif item == "brimstone":
+                                isaac.laser = True
+                                isaac.pickup_text = "Laser démoniaque!"
+                            elif item == "abaddon":
+                                isaac.speed += 1
+                                isaac.damage += 2
+                                isaac.pickup_text = "Vitesse et Dégâts ++!"
+                            elif item == "pentagram":
+                                isaac.damage += 2
+                                isaac.speed += 1
+                                isaac.fire_rate += 0.2
+                                isaac.pickup_text = "Toutes stats ++!"
+                            # Retirer l'objet de la salle
+                            current_room.items.pop(i)
+                            current_room.prices.pop(i)
+                            isaac.pickup_timer = 60
+                            break
 
                     elif current_room.type == "angel":
                         if item == "ailes_sacrees":
@@ -1240,14 +1315,14 @@ def main():
                             isaac.score += 1000
                             isaac.coins += 5
                             room_chance = random.random()
-                            if room_chance < 0.4:  # Modifier ici la proba room demon
+                            if room_chance < 0.3:  # Modifier ici la proba room demon
                                 new_pos = (game.floor.current_position[0], game.floor.current_position[1] + 1)
                                 if new_pos not in game.floor.rooms:
                                     game.floor.rooms[new_pos] = Room("devil", game.floor.level)
                                     game.floor.rooms[new_pos].spawn_special_room("devil")
                                     current_room.doors["bottom"] = True
                                     game.floor.rooms[new_pos].doors["top"] = True
-                            elif room_chance < 0.1:  # proba room ange si demon spawn pas
+                            elif room_chance < 0.5:  # proba room ange 
                                 new_pos = (game.floor.current_position[0], game.floor.current_position[1] + 1)
                                 if new_pos not in game.floor.rooms:
                                     game.floor.rooms[new_pos] = Room("angel", game.floor.level)
