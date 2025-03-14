@@ -3,6 +3,9 @@ import pygame
 import random
 import math
 import time
+import os
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
 CHEATS_ENABLED = False
 
@@ -28,7 +31,7 @@ FLOOR_COLORS = [
     BROWN,  # marron
     (100, 100, 100),  # gris
     (0, 100, 100),  # Cyan
-    (139, 0, 0),  # rouge 
+    (139, 0, 0),  # rouge
     (75, 0, 130),  # violet
     (25, 25, 25),  # gris fonce
 ]
@@ -36,6 +39,18 @@ FLOOR_COLORS = [
 
 ROOM_TYPES = ["normal", "treasure", "boss", "shop", "devil", "angel"]
 ENEMY_TYPES = ["fly", "spider", "pooter", "charger"]
+
+fly_sprites = []
+for i in range(3): #fly_0.png, fly_1.png, fly_2.png
+    sprite_path = os.path.join(script_dir, "sprites", f"fly_{i}.png")
+    try:
+        fly_sprites.append(pygame.image.load(sprite_path).convert_alpha())
+    except FileNotFoundError:
+        print(f"Sprite pas trouvé")
+        fly_sprites.append(None)  # erreur qui ne devrait pas arriver
+
+# Scale a 64 pixels
+fly_sprites = [pygame.transform.scale(sprite, (64, 64)) for sprite in fly_sprites]
 
 DEVIL_ITEMS = [
     ("pacte_sang", "Dégâts x2, -2 Coeurs"),
@@ -55,11 +70,11 @@ def start_screen():
     screen.fill(BLACK)
     font_large = pygame.font.SysFont("Arial", 64)
     font_small = pygame.font.SysFont("Arial", 32)
-    
+
     title = font_large.render("Binding Of Pygame", True, RED)
     start_text = font_small.render("Appuyez sur ENTRÉE pour Commencer", True, WHITE)
     controls_text = font_small.render("Flèches pour Tirer, WASD pour Bouger", True, WHITE)
-    
+
     screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//3))
     screen.blit(start_text, (WIDTH//2 - start_text.get_width()//2, HEIGHT//2))
     screen.blit(controls_text, (WIDTH//2 - controls_text.get_width()//2, HEIGHT//2 + 50))
@@ -71,7 +86,7 @@ def game_over_screen(score):
     game_over_text = font.render("PARTIE TERMINÉE", True, RED)
     restart_text = font.render("Appuyez sur ENTRÉE pour recommencer", True, WHITE)
     score_text = font.render(f"Score: {score}", True, WHITE)
-    
+
     screen.blit(game_over_text, (WIDTH//2 - game_over_text.get_width()//2, HEIGHT//3))
     screen.blit(score_text, (WIDTH//2 - score_text.get_width()//2, HEIGHT//2))
     screen.blit(restart_text, (WIDTH//5 - restart_text.get_width()//2, HEIGHT//2 + 100))
@@ -91,8 +106,6 @@ class Isaac:
         self.shoot_delay = 15
         self.shoot_timer = 0
         self.coins = 0
-        self.keys = 0
-        self.bombs = 0
         self.items = []
         self.invincibility_frames = 0
         self.invincibility_duration = 60  # 1 seconde a 60 FPS
@@ -104,16 +117,16 @@ class Isaac:
         self.explosive = False
         self.scatter = False
         self.spectral = False
-        self.laser = False 
-        self.flying = False 
-        self.holy_aura = False 
-        self.aura_damage = 2  
-        self.regen = False 
-        self.holy_triple = False 
-        self.laser_damage = 2  
-        self.regen_timer = 0  
+        self.laser = False
+        self.flying = False
+        self.holy_aura = False
+        self.aura_damage = 2
+        self.regen = False
+        self.holy_triple = False
+        self.laser_damage = 2
+        self.regen_timer = 0
         self.laser_direction = (1, 0)
-        self.shooting = False 
+        self.shooting = False
         self.dx = 0
         self.dy = 0
         self.dash_cooldown = 0
@@ -121,7 +134,7 @@ class Isaac:
         self.is_dashing = False
 
     def draw(self):
-        # Draw Isaac 
+        # Draw Isaac
         pygame.draw.circle(screen, BEIGE, (int(self.x), int(self.y)), self.size)
         pygame.draw.circle(screen, BLACK, (int(self.x - 8), int(self.y - 5)), 4)
         pygame.draw.circle(screen, BLACK, (int(self.x + 8), int(self.y - 5)), 4)
@@ -151,15 +164,15 @@ class Isaac:
         if self.flying:
             pygame.draw.polygon(screen, WHITE, [(self.x - 20, self.y), (self.x - 30, self.y - 10), (self.x - 20, self.y - 20)])
             pygame.draw.polygon(screen, WHITE, [(self.x + 20, self.y), (self.x + 30, self.y - 10), (self.x + 20, self.y - 20)])
-        
+
         # Draw coeurs
         for i in range(self.max_health // 2):
             if self.health >= (i + 1) * 2:
-                pygame.draw.circle(screen, RED, (30 + i * 30, 30), 10)  # Full 
+                pygame.draw.circle(screen, RED, (30 + i * 30, 30), 10)  # Full
             elif self.health >= i * 2 + 1:
-                pygame.draw.arc(screen, RED, (20 + i * 30, 20, 20, 20), 0, math.pi, 2)  # Half 
+                pygame.draw.arc(screen, RED, (20 + i * 30, 20, 20, 20), 0, math.pi, 2)  # Half
 
-        # Draw pieces 
+        # Draw pieces
         font = pygame.font.SysFont("Arial", 20)
         coin_text = font.render(f"{self.coins}$", True, YELLOW)
         screen.blit(coin_text, (WIDTH - 100, 30))
@@ -186,7 +199,7 @@ class Isaac:
                 # Triple tir
                 if self.triple_shot:
                     self.tears.append(Tear(self.x, self.y, dx * tear_speed, dy * tear_speed, self.damage, properties))
-                    
+
                     # Calculer angles pour les tears gauches droites
                     angle = math.atan2(dy, dx)
                     left_angle = angle - math.pi / 12  # 15 degrees a gauche
@@ -239,16 +252,16 @@ class Isaac:
         self.dx, self.dy = 0, 0
 
         # Update vitesse modifier pour clavier azerty
-        if keys[pygame.K_a]: self.dx = -1 
-        if keys[pygame.K_d]: self.dx = 1 
-        if keys[pygame.K_w]: self.dy = -1
-        if keys[pygame.K_s]: self.dy = 1 
+        if keys[pygame.K_q]: self.dx = -1
+        if keys[pygame.K_d]: self.dx = 1
+        if keys[pygame.K_z]: self.dy = -1
+        if keys[pygame.K_s]: self.dy = 1
         # Normaliser vitesse diagonale
         if self.dx != 0 and self.dy != 0:
-            self.dx *= 0.7071  
+            self.dx *= 0.7071
             self.dy *= 0.7071
 
-        # Dash 
+        # Dash
         if keys[pygame.K_SPACE] and self.dash_cooldown == 0:
             self.is_dashing = True
             self.dash_cooldown = 60  # 1 seconde
@@ -323,7 +336,7 @@ class Isaac:
             self.x = room.x + self.size
         elif self.x > room.x + room.width - self.size and not (HEIGHT//2 - 30 < self.y < HEIGHT//2 + 30):
             self.x = room.x + room.width - self.size
-            
+
         if self.y < room.y + self.size and not (WIDTH//2 - 30 < self.x < WIDTH//2 + 30):
             self.y = room.y + self.size
         elif self.y > room.y + room.height - self.size and not (WIDTH//2 - 30 < self.x < WIDTH//2 + 30):
@@ -383,11 +396,11 @@ class Tear:
         self.lifetime = 60
         self.properties = properties or {}
         self.hit_enemies = set()
-        
+
     def update(self, current_room):
         next_x = self.x + self.dx
         next_y = self.y + self.dy
-        
+
         # Check mur collisions (sauf si tirs spectraux)
         if not self.properties.get('spectral'):
             if next_x < 50 or next_x > WIDTH - 50 or next_y < 50 or next_y > HEIGHT - 50:
@@ -403,14 +416,14 @@ class Tear:
                     )
                     current_room.particles.append(particle)
                 return True  # Signal pour enlever le tir
-        
+
         if self.properties.get('homing') and current_room.enemies:
             closest = min(current_room.enemies, key=lambda e: math.dist((self.x, self.y), (e.x, e.y)))
             angle = math.atan2(closest.y - self.y, closest.x - self.x)
             homing_strength = 0.2 if self.properties.get('triple_shot') else 0.3
             self.dx += math.cos(angle) * homing_strength
             self.dy += math.sin(angle) * homing_strength
-                    
+
         self.x = next_x
         self.y = next_y
         self.lifetime -= 1
@@ -421,7 +434,7 @@ class Tear:
         color = BLUE
         if self.properties.get('explosive'): color = RED
         if self.properties.get('spectral'): color = (200, 200, 255, 128)
-        
+
         pygame.draw.circle(screen, color, (int(self.x), int(self.y)), self.size)
 
 
@@ -439,21 +452,24 @@ class Enemy:
         self.charge_cooldown = 180
         self.charge_timer = 0
         self.charging = False
+        self.sprites = fly_sprites  # ne pas juger
+        self.current_frame = 0      # initial
+        self.animation_speed = 7    # vitesse animation /!\ plus haut = moins vite
+        self.frame_counter = 0      # compteur
         if enemy_type == "boss":
             self.shoot_delay = 400
-            self.spawn_timer = 200 
+            self.spawn_timer = 200
             self.spawn_cooldown = 200
         else:
             self.shoot_delay = 120
         self.size = 20 if enemy_type != "boss" else 30
-        self.floor_level = floor_level 
+        self.floor_level = floor_level
 
-    def draw(self):
+    def draw(self, screen):
         # tas de bla bla qui dessine les ennemies
         if self.type == "fly":
-            pygame.draw.circle(screen, BLACK, (int(self.x), int(self.y)), self.size + 2)
-            pygame.draw.circle(screen, (150, 150, 150), (int(self.x), int(self.y)), self.size)
-            pygame.draw.circle(screen, (100, 100, 100), (int(self.x), int(self.y)), self.size - 5)
+            if self.sprites[self.current_frame]: 
+               screen.blit(self.sprites[self.current_frame], (self.x, self.y))
         elif self.type == "spider":
             pygame.draw.rect(screen, BLACK, (self.x - self.size - 2, self.y - self.size - 2, (self.size * 2) + 4, (self.size * 2) + 4))
             pygame.draw.rect(screen, (30, 30, 30), (self.x - self.size, self.y - self.size, self.size * 2, self.size * 2))
@@ -464,11 +480,16 @@ class Enemy:
             color = (255, 165, 0) if self.charging else (200, 50, 50)
             pygame.draw.rect(screen, color, (self.x-self.size, self.y-self.size, self.size*2, self.size*2))
         if self.type == "boss":
-            size_mult = min(2.5, 1 + (self.health / 200)) 
+            size_mult = min(2.5, 1 + (self.health / 200))
             pygame.draw.circle(screen, BLACK, (int(self.x), int(self.y)), int(self.size * size_mult) + 2)
             pygame.draw.circle(screen, RED, (int(self.x), int(self.y)), int(self.size * size_mult))
 
     def update(self):
+        if self.type == "fly":
+            self.frame_counter += 1
+            if self.frame_counter >= self.animation_speed:
+                self.frame_counter = 0
+                self.current_frame = (self.current_frame + 1) % len(self.sprites)
         if self.shoot_cooldown > 0:
             self.shoot_cooldown -= 1
         if self.type == 'charger':
@@ -477,7 +498,7 @@ class Enemy:
         if self.type == "boss":
             if self.spawn_timer > 0:
                 self.spawn_timer -= 1
-            
+
     def move_towards(self, target_x, target_y):
         # IA des ennemis pour venir a Isaac
         if self.type == "fly":
@@ -554,11 +575,11 @@ class Projectile:
     def update(self):
         next_x = self.x + self.dx
         next_y = self.y + self.dy
-        
+
         # Check mur collisions
         if next_x < 50 or next_x > WIDTH - 50 or next_y < 50 or next_y > HEIGHT - 50:
             return True  # Signal pr enlever tirs
-            
+
         self.x = next_x
         self.y = next_y
         return False
@@ -591,7 +612,7 @@ class Floor:
                 pos = positions.pop(0)
                 self.rooms[pos] = Room("normal", self.level)
 
-        # Replace les rooms normales avec les rooms speciales 
+        # Replace les rooms normales avec les rooms speciales
         normal_positions = [(x, y) for (x, y) in self.rooms.keys() if (x, y) != (0, 0)]
         special_rooms = ["treasure", "shop", "boss"]
 
@@ -645,7 +666,7 @@ class Room:
         self.doors = {"top": False, "bottom": False, "left": False, "right": False}
         self.cleared = room_type in ["start", "treasure"]
         self.items = []
-        self.floor_level = floor_level 
+        self.floor_level = floor_level
         self.obstacles = []
         if room_type == "normal":
             self.spawn_enemies(floor_level)
@@ -658,26 +679,26 @@ class Room:
         elif room_type == "shop":
             self.spawn_shop_items()
 
-    
+
     def spawn_obstacles(self):
         num_obstacles = random.randint(3, 6)
         safe_radius = 100
-        
+
         for _ in range(num_obstacles):
             while True:
                 x = random.randint(self.x + 100, self.x + self.width - 100)
                 y = random.randint(self.y + 100, self.y + self.height - 100)
-                
+
                 # Check si la position n'interfere pas avec le safe radius pr pas qu'on soit bloquer en gros
                 center_safe = math.dist((x, y), (WIDTH//2, HEIGHT//2)) > safe_radius
                 top_safe = math.dist((x, y), (WIDTH//2, 50)) > safe_radius
                 bottom_safe = math.dist((x, y), (WIDTH//2, HEIGHT-50)) > safe_radius
                 left_safe = math.dist((x, y), (50, HEIGHT//2)) > safe_radius
                 right_safe = math.dist((x, y), (WIDTH-50, HEIGHT//2)) > safe_radius
-                
+
                 # Check distance des autres obstacles
                 obstacles_safe = all(math.dist((x, y), (obs['x'], obs['y'])) > 100 for obs in self.obstacles)
-                
+
                 if center_safe and top_safe and bottom_safe and left_safe and right_safe and obstacles_safe:
                     self.obstacles.append({
                         'x': x,
@@ -692,21 +713,21 @@ class Room:
         num_enemies = random.randint(3, 5 + floor_level)
         enemy_health = 10 + (floor_level * 5)
         safe_radius = 150
-        
+
         for _ in range(num_enemies):
             enemy_type = random.choice(ENEMY_TYPES)
-            
+
             while True:
                 x = random.randint(self.x + 50, self.x + self.width - 50)
                 y = random.randint(self.y + 50, self.y + self.height - 50)
-                
+
                 # Check distance du centre ET des portes a peu pres pareil que obstacle
                 center_safe = math.dist((x, y), (WIDTH//2, HEIGHT//2)) > safe_radius
                 top_safe = math.dist((x, y), (WIDTH//2, 50)) > safe_radius
                 bottom_safe = math.dist((x, y), (WIDTH//2, HEIGHT-50)) > safe_radius
                 left_safe = math.dist((x, y), (50, HEIGHT//2)) > safe_radius
                 right_safe = math.dist((x, y), (WIDTH-50, HEIGHT//2)) > safe_radius
-                
+
                 if center_safe and top_safe and bottom_safe and left_safe and right_safe:
                     self.enemies.append(Enemy(enemy_type, x, y, enemy_health))
                     break
@@ -719,7 +740,7 @@ class Room:
     def spawn_treasure(self):
         self.items.append(random.choice([
             "degats_plus",
-            "vie_plus", 
+            "vie_plus",
             "tirs_plus",
             "vitesse_plus",
             "portee_plus",
@@ -759,7 +780,7 @@ class Room:
         self.type = room_type
         self.items = []
         self.prices = []
-        
+
         if room_type == "devil":
             selected = random.sample(DEVIL_ITEMS, 2)
             for item_info in selected:
@@ -773,7 +794,7 @@ class Room:
                 elif item == "abaddon":
                     self.prices.append(2)
                 elif item == "pentagram":
-                    self.prices.append(1) 
+                    self.prices.append(1)
         elif room_type == "angel":
             selected = random.sample(ANGEL_ITEMS, 2)
             for item in selected:
@@ -789,11 +810,11 @@ class Room:
         pygame.draw.rect(screen, floor_color, (self.x, self.y, self.width, self.height))
 
         for obstacle in self.obstacles:
-            pygame.draw.rect(screen, GREEN, (obstacle['x'] - obstacle['size']//2, 
-                                           obstacle['y'] - obstacle['size']//2, 
-                                           obstacle['size'], 
+            pygame.draw.rect(screen, GREEN, (obstacle['x'] - obstacle['size']//2,
+                                           obstacle['y'] - obstacle['size']//2,
+                                           obstacle['size'],
                                            obstacle['size']))
-        
+
         # Draw portes
         door_width = 60
         door_color = RED if self.enemies and self.type != "start" else BLACK
@@ -882,7 +903,7 @@ class Game:
         elif direction == "bottom": dy = 1
         elif direction == "left": dx = -1
         elif direction == "right": dx = 1
-        
+
         new_pos = (self.floor.current_position[0] + dx, self.floor.current_position[1] + dy)
         if new_pos in self.floor.rooms:
             self.floor.current_position = new_pos
@@ -925,11 +946,11 @@ class Game:
             room = self.floor.rooms.get(pos)
             if not room:
                 continue
-                
+
             x, y = pos
             map_x = WIDTH - 120 + (x * 15)
             map_y = 100 + (y * 15)
-            
+
             # Couleur de base
             if pos == self.floor.current_position:
                 color = WHITE
@@ -937,13 +958,13 @@ class Game:
                 color = (50, 50, 50)  # Salle visitée
             else:
                 color = (150, 150, 150)  # Salle non visitée mais adjacente
-            
+
             pygame.draw.rect(screen, color, (map_x, map_y, map_size, map_size))
 
             # Dessiner les icônes spéciales même pour les salles non visitées
             if room.type in ["boss", "shop", "treasure", "devil", "angel"]:
                 icon_color = color if pos in self.floor.visited_rooms else (150, 150, 150)  # Gris si non visitée
-                
+
                 if room.type == "boss":
                     pygame.draw.circle(screen, (190, 0, 0), (map_x + map_size//2, map_y + map_size//2), 3)
                 elif room.type == "shop":
@@ -992,7 +1013,7 @@ def main():
         # Clear screen
         screen.fill(BLACK)
 
-        # Get room 
+        # Get room
         current_room = game.floor.rooms[game.floor.current_position]
 
         # events
@@ -1140,7 +1161,7 @@ def main():
             for i, (item, price) in enumerate(zip(current_room.shop_items[:], current_room.shop_prices[:])):
                 x = WIDTH//3 if i == 0 else 2 * WIDTH//3
                 y = HEIGHT//2
-                
+
                 # Check des collision // pieces
                 if math.dist((isaac.x, isaac.y), (x, y)) < 30 and isaac.coins >= price:
                     # Deduire les pieces
@@ -1187,13 +1208,13 @@ def main():
                         isaac.spectral = True
                         isaac.pickup_text = "Tirs Spectraux!"
                     isaac.pickup_timer = 60
-            
+
                     # enlever item shop
                     current_room.shop_items.pop(i)
                     current_room.shop_prices.pop(i)
                     isaac.pickup_timer = 60
                     break
-                
+
 
         if current_room.type in ["devil", "angel"]:
             #c'est la meme chose que les dernieres fois
@@ -1230,11 +1251,11 @@ def main():
 
                     elif current_room.type == "angel":
                         if item == "ailes_sacrees":
-                            isaac.flying = True 
+                            isaac.flying = True
                             isaac.speed += 2
                             isaac.pickup_text = "Vol, Vitesse ++!"
                         elif item == "couronne_divine":
-                            isaac.holy_aura = True  
+                            isaac.holy_aura = True
                             isaac.damage += 2
                             isaac.pickup_text = "Aura Sacrée, Dégâts ++!"
                         elif item == "calice_sacre":
@@ -1243,12 +1264,12 @@ def main():
                             isaac.regen = True
                             isaac.pickup_text = "Régénération, Max HP ++!"
                         elif item == "aureole":
-                            isaac.holy_triple = True 
+                            isaac.holy_triple = True
                             isaac.pickup_text = "Triple Tir Sacré!"
                         current_room.items.pop(i)
                         current_room.prices.pop(i)
                         isaac.pickup_timer = 60
-                        break 
+                        break
 
         # transitions entre les rooms
         if current_room.doors["top"] and isaac.y < 70 and WIDTH // 2 - 30 < isaac.x < WIDTH // 2 + 30:
@@ -1276,7 +1297,7 @@ def main():
         for enemy in current_room.enemies[:]:
             enemy.update()
             enemy.move_towards(isaac.x, isaac.y)
-            enemy.draw()
+            enemy.draw(screen)
 
             if enemy.type == "pooter" or enemy.type == "boss":
                 if enemy.shoot_cooldown <= 0:
@@ -1322,7 +1343,7 @@ def main():
                                     game.floor.rooms[new_pos].spawn_special_room("devil")
                                     current_room.doors["bottom"] = True
                                     game.floor.rooms[new_pos].doors["top"] = True
-                            elif room_chance < 0.5:  # proba room ange 
+                            elif room_chance < 0.5:  # proba room ange
                                 new_pos = (game.floor.current_position[0], game.floor.current_position[1] + 1)
                                 if new_pos not in game.floor.rooms:
                                     game.floor.rooms[new_pos] = Room("angel", game.floor.level)
@@ -1355,7 +1376,7 @@ def main():
         # Draw Isaac
         isaac.draw()
 
-        # Draw texte 
+        # Draw texte
         if isaac.pickup_timer > 0:
             font = pygame.font.SysFont("Arial", 24)
             text = font.render(isaac.pickup_text, True, WHITE)
