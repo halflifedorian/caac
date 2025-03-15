@@ -41,7 +41,17 @@ ROOM_TYPES = ["normal", "treasure", "boss", "shop", "devil", "angel"]
 ENEMY_TYPES = ["fly", "spider", "pooter", "charger"]
 
 fly_sprites = []
-for i in range(3): #fly_0.png, fly_1.png, fly_2.png
+pooter_sprites = []
+spider_sprites = []
+obstacle_sprites = []
+
+sprite_path = os.path.join(script_dir, "sprites", "obstacle.png")
+try:
+    obstacle_sprites.append(pygame.image.load(sprite_path).convert_alpha())
+except FileNotFoundError:
+    print('Sprite pas trouvé')
+
+for i in range(3): #fly_0.png, fly_1.png, fly_2.png et les autres
     sprite_path = os.path.join(script_dir, "sprites", f"fly_{i}.png")
     try:
         fly_sprites.append(pygame.image.load(sprite_path).convert_alpha())
@@ -49,8 +59,28 @@ for i in range(3): #fly_0.png, fly_1.png, fly_2.png
         print(f"Sprite pas trouvé")
         fly_sprites.append(None)  # erreur qui ne devrait pas arriver
 
+for i in range(3):
+    sprite_path = os.path.join(script_dir, "sprites", f"pooter_{i}.png")
+    try:
+        pooter_sprites.append(pygame.image.load(sprite_path).convert_alpha())
+    except FileNotFoundError:
+        print(f"Sprite pas trouvé")
+        pooter_sprites.append(None)  # erreur qui ne devrait pas arriver 
+
+for i in range(3):
+    sprite_path = os.path.join(script_dir, "sprites", f"spider_{i}.png")
+    try:
+        spider_sprites.append(pygame.image.load(sprite_path).convert_alpha())
+    except FileNotFoundError:
+        print(f"Sprite pas trouvé")
+        pooter_sprites.append(None)  # erreur qui ne devrait pas arriver 
+
+
 # Scale a 64 pixels
-fly_sprites = [pygame.transform.scale(sprite, (64, 64)) for sprite in fly_sprites]
+obstacle_sprites = [pygame.transform.scale(sprite, (64, 64)) for sprite in obstacle_sprites]
+fly_sprites = [pygame.transform.scale(sprite, (48, 48)) for sprite in fly_sprites]
+pooter_sprites = [pygame.transform.scale(sprite, (64, 64)) for sprite in pooter_sprites]
+spider_sprites = [pygame.transform.scale(sprite, (48, 48)) for sprite in spider_sprites]
 
 DEVIL_ITEMS = [
     ("pacte_sang", "Dégâts x2, -2 Coeurs"),
@@ -74,6 +104,7 @@ def start_screen():
     title = font_large.render("Binding Of Pygame", True, RED)
     start_text = font_small.render("Appuyez sur ENTRÉE pour Commencer", True, WHITE)
     controls_text = font_small.render("Flèches pour Tirer, WASD pour Bouger", True, WHITE)
+    controls_text = font_small.render("Espace pour esquiver", True, WHITE)
 
     screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//3))
     screen.blit(start_text, (WIDTH//2 - start_text.get_width()//2, HEIGHT//2))
@@ -83,13 +114,14 @@ def start_screen():
 def game_over_screen(score):
     screen.fill(BLACK)
     font = pygame.font.SysFont("Arial", 64)
+    font_small = pygame.font.SysFont("Arial", 32)
     game_over_text = font.render("PARTIE TERMINÉE", True, RED)
-    restart_text = font.render("Appuyez sur ENTRÉE pour recommencer", True, WHITE)
+    restart_text = font_small.render("Appuyez sur ENTRÉE pour recommencer", True, WHITE)
     score_text = font.render(f"Score: {score}", True, WHITE)
 
     screen.blit(game_over_text, (WIDTH//2 - game_over_text.get_width()//2, HEIGHT//3))
     screen.blit(score_text, (WIDTH//2 - score_text.get_width()//2, HEIGHT//2))
-    screen.blit(restart_text, (WIDTH//5 - restart_text.get_width()//2, HEIGHT//2 + 100))
+    screen.blit(restart_text, (WIDTH//2 - restart_text.get_width()//2, HEIGHT//2 + 100))
     pygame.display.flip()
 
 class Isaac:
@@ -252,9 +284,9 @@ class Isaac:
         self.dx, self.dy = 0, 0
 
         # Update vitesse modifier pour clavier azerty
-        if keys[pygame.K_q]: self.dx = -1
+        if keys[pygame.K_a]: self.dx = -1
         if keys[pygame.K_d]: self.dx = 1
-        if keys[pygame.K_z]: self.dy = -1
+        if keys[pygame.K_w]: self.dy = -1
         if keys[pygame.K_s]: self.dy = 1
         # Normaliser vitesse diagonale
         if self.dx != 0 and self.dy != 0:
@@ -342,14 +374,6 @@ class Isaac:
         elif self.y > room.y + room.height - self.size and not (WIDTH//2 - 30 < self.x < WIDTH//2 + 30):
             self.y = room.y + room.height - self.size
 
-    def game_over_screen():
-        screen.fill(BLACK)
-        font = pygame.font.SysFont("Arial", 64)
-        game_over_text = font.render("GAME OVER", True, RED)
-        restart_text = font.render("Press ENTER to restart", True, WHITE)
-        screen.blit(game_over_text, (WIDTH//2 - game_over_text.get_width()//2, HEIGHT//2 - 50))
-        screen.blit(restart_text, (WIDTH//2 - restart_text.get_width()//2, HEIGHT//2 + 50))
-        pygame.display.flip()
 
 def draw_stats(isaac):
     font = pygame.font.SysFont("Arial", 20)
@@ -452,7 +476,9 @@ class Enemy:
         self.charge_cooldown = 180
         self.charge_timer = 0
         self.charging = False
-        self.sprites = fly_sprites  # ne pas juger
+        self.sprites = fly_sprites 
+        self.sprites0 = spider_sprites
+        self.sprites1 = pooter_sprites
         self.current_frame = 0      # initial
         self.animation_speed = 7    # vitesse animation /!\ plus haut = moins vite
         self.frame_counter = 0      # compteur
@@ -471,11 +497,13 @@ class Enemy:
             if self.sprites[self.current_frame]: 
                screen.blit(self.sprites[self.current_frame], (self.x, self.y))
         elif self.type == "spider":
-            pygame.draw.rect(screen, BLACK, (self.x - self.size - 2, self.y - self.size - 2, (self.size * 2) + 4, (self.size * 2) + 4))
-            pygame.draw.rect(screen, (30, 30, 30), (self.x - self.size, self.y - self.size, self.size * 2, self.size * 2))
+            if self.sprites0[self.current_frame]: 
+                sprite_width, sprite_height = self.sprites0[self.current_frame].get_size()
+                screen.blit(self.sprites0[self.current_frame], (self.x - sprite_width // 2, self.y - sprite_height // 2))
         elif self.type == "pooter":
-            pygame.draw.circle(screen, BLACK, (int(self.x), int(self.y)), self.size + 2)
-            pygame.draw.circle(screen, BROWN, (int(self.x), int(self.y)), self.size)
+            if self.sprites1[self.current_frame]: 
+                sprite_width, sprite_height = self.sprites1[self.current_frame].get_size()
+                screen.blit(self.sprites1[self.current_frame], (self.x - sprite_width // 2, self.y - sprite_height // 2))
         elif self.type == 'charger':
             color = (255, 165, 0) if self.charging else (200, 50, 50)
             pygame.draw.rect(screen, color, (self.x-self.size, self.y-self.size, self.size*2, self.size*2))
@@ -486,10 +514,20 @@ class Enemy:
 
     def update(self):
         if self.type == "fly":
-            self.frame_counter += 1
+            self.frame_counter += 0.5
             if self.frame_counter >= self.animation_speed:
                 self.frame_counter = 0
                 self.current_frame = (self.current_frame + 1) % len(self.sprites)
+        if self.type == "pooter":
+            self.frame_counter += 0.25
+            if self.frame_counter >= self.animation_speed:
+                self.frame_counter = 0
+                self.current_frame = (self.current_frame + 1) % len(self.sprites1)
+        if self.type == "spider":
+            self.frame_counter += 1
+            if self.frame_counter >= self.animation_speed:
+                self.frame_counter = 0
+                self.current_frame = (self.current_frame + 1) % len(self.sprites0)
         if self.shoot_cooldown > 0:
             self.shoot_cooldown -= 1
         if self.type == 'charger':
@@ -508,8 +546,8 @@ class Enemy:
         elif self.type == "spider":
             if random.randint(0, 100) < 5:  # 5% de changer de direction
                 angle = math.atan2(target_y - self.y, target_x - self.x)
-                self.x += math.cos(angle) * self.speed * 3
-                self.y += math.sin(angle) * self.speed * 3
+                self.x += math.cos(angle) * self.speed * 5
+                self.y += math.sin(angle) * self.speed * 5
         if self.type == "pooter":
             if self.shoot_cooldown <= 0:
                 self.shoot(target_x, target_y)
@@ -538,6 +576,8 @@ class Enemy:
                 isaac.health -= 1
                 isaac.invincibility_frames = isaac.invincibility_duration
                 return True
+            if isaac.health <=0:
+                game_over = True
         return False
 
     def shoot(self, target_x, target_y):
@@ -668,6 +708,8 @@ class Room:
         self.items = []
         self.floor_level = floor_level
         self.obstacles = []
+        self.size = 20
+        self.spriteobstacle = obstacle_sprites
         if room_type == "normal":
             self.spawn_enemies(floor_level)
             self.spawn_obstacles()
@@ -681,7 +723,7 @@ class Room:
 
 
     def spawn_obstacles(self):
-        num_obstacles = random.randint(3, 6)
+        num_obstacles = random.randint(1, 4)
         safe_radius = 100
 
         for _ in range(num_obstacles):
@@ -810,10 +852,9 @@ class Room:
         pygame.draw.rect(screen, floor_color, (self.x, self.y, self.width, self.height))
 
         for obstacle in self.obstacles:
-            pygame.draw.rect(screen, GREEN, (obstacle['x'] - obstacle['size']//2,
-                                           obstacle['y'] - obstacle['size']//2,
-                                           obstacle['size'],
-                                           obstacle['size']))
+            if self.spriteobstacle:  # Check if the list is not empty
+                sprite_width, sprite_height = self.spriteobstacle[0].get_size()  # Access the first sprite
+                screen.blit(self.spriteobstacle[0], (obstacle['x'] - sprite_width // 2, obstacle['y'] - sprite_height // 2))
 
         # Draw portes
         door_width = 60
@@ -920,14 +961,6 @@ class Game:
         isaac.y = HEIGHT // 2
         isaac.health = min(isaac.health + 2, isaac.max_health)  # Heal 1 coeurs entre chaque etage car je suis gentil
 
-    def game_over_screen():
-        screen.fill(BLACK)
-        font = pygame.font.SysFont("Arial", 64)
-        game_over_text = font.render("PARTIE TERMINÉE", True, RED)
-        restart_text = font.render("Appuyez sur ENTRÉE pour recommencer", True, WHITE)
-        screen.blit(game_over_text, (WIDTH//2 - game_over_text.get_width()//2, HEIGHT//2 - 50))
-        screen.blit(restart_text, (WIDTH//2 - restart_text.get_width()//2, HEIGHT//2 + 50))
-        pygame.display.flip()
 
     def draw_minimap(self):
         map_size = 10
@@ -1107,8 +1140,8 @@ def main():
                     isaac.health -= 1
                     isaac.invincibility_frames = isaac.invincibility_duration
                     if isaac.health <= 0:
-                        game_over = True
-
+                        game_over = True  # Set game_over to True when health <= 0
+                        print("Game Over! Health reached 0.")  # Debug print
         # blabla treasure room
         if current_room.type == "treasure" and current_room.items:
             if math.dist((isaac.x, isaac.y), (WIDTH // 2, HEIGHT // 2)) < 30:
@@ -1343,7 +1376,7 @@ def main():
                                     game.floor.rooms[new_pos].spawn_special_room("devil")
                                     current_room.doors["bottom"] = True
                                     game.floor.rooms[new_pos].doors["top"] = True
-                            elif room_chance < 0.5:  # proba room ange
+                            elif room_chance < 0.5:  # proba room ange SUR room
                                 new_pos = (game.floor.current_position[0], game.floor.current_position[1] + 1)
                                 if new_pos not in game.floor.rooms:
                                     game.floor.rooms[new_pos] = Room("angel", game.floor.level)
