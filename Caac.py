@@ -9,10 +9,15 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 
 CHEATS_ENABLED = False
 
+pygame.mixer.init()
+shoot_sound = pygame.mixer.Sound("audio/shoot.mp3")
+tripleshoot_sound = pygame.mixer.Sound("audio/shoottriple.mp3")
+scattershoot_sound = pygame.mixer.Sound("audio/scattershoot.mp3")
+
 pygame.init()
 WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Binding of Pygame")
+pygame.display.set_caption("Caac")
 clock = pygame.time.Clock()
 
 
@@ -41,15 +46,59 @@ ROOM_TYPES = ["normal", "treasure", "boss", "shop", "devil", "angel"]
 ENEMY_TYPES = ["fly", "spider", "pooter", "charger"]
 
 fly_sprites = []
+boss_sprites = []
 pooter_sprites = []
 spider_sprites = []
 obstacle_sprites = []
+charger_sprites = []
+isaac_sprites = {
+    "idle": {
+        "up": [],
+        "down": [],
+        "left": [],
+        "right": []
+    },
+    "walk": {
+        "up": [],
+        "down": [],
+        "left": [],
+        "right": []
+    }
+}
 
+# Load sprites with error handling
+def load_sprite_frames(base_name, directions, frame_count):
+    frames = {}
+    for direction in directions:
+        frames[direction] = []
+        for i in range(frame_count):
+            try:
+                sprite_path = os.path.join(script_dir, "sprites", f"{base_name}_{direction}_{i}.png")
+                sprite = pygame.image.load(sprite_path).convert_alpha()
+                frames[direction].append(pygame.transform.scale(sprite, (80, 80)))
+            except (FileNotFoundError, pygame.error) as e:
+                print(f"Error loading {base_name}_{direction}_{i}.png: {e}")
+                # Fallback - create a colored rectangle so we can see missing sprites
+                surf = pygame.Surface((50, 50), pygame.SRCALPHA)
+                color = (255, 0, 255) if direction == "up" else \
+                        (0, 255, 255) if direction == "down" else \
+                        (255, 255, 0) if direction == "left" else \
+                        (0, 255, 0)
+                surf.fill(color)
+                frames[direction].append(surf)
+    return frames
+
+# Load idle (1 frame per direction)
+isaac_sprites["idle"] = load_sprite_frames("isaac_idle", ["up", "down", "left", "right"], 1)
+
+# Load walk (3 frames per direction)
+isaac_sprites["walk"] = load_sprite_frames("isaac_walk", ["up", "down", "left", "right"], 2)
 sprite_path = os.path.join(script_dir, "sprites", "obstacle.png")
 try:
     obstacle_sprites.append(pygame.image.load(sprite_path).convert_alpha())
 except FileNotFoundError:
     print('Sprite pas trouvé')
+
 
 for i in range(3): #fly_0.png, fly_1.png, fly_2.png et les autres
     sprite_path = os.path.join(script_dir, "sprites", f"fly_{i}.png")
@@ -58,6 +107,22 @@ for i in range(3): #fly_0.png, fly_1.png, fly_2.png et les autres
     except FileNotFoundError:
         print(f"Sprite pas trouvé")
         fly_sprites.append(None)  # erreur qui ne devrait pas arriver
+
+for i in range(1): #fly_0.png, fly_1.png, fly_2.png et les autres
+    sprite_path = os.path.join(script_dir, "sprites", f"boss_{i}.png")
+    try:
+        boss_sprites.append(pygame.image.load(sprite_path).convert_alpha())
+    except FileNotFoundError:
+        print(f"Sprite pas trouvé")
+        boss_sprites.append(None)  # erreur qui ne devrait pas arriver
+
+for i in range(3): #fly_0.png, fly_1.png, fly_2.png et les autres
+    sprite_path = os.path.join(script_dir, "sprites", f"charger_{i}.png")
+    try:
+        charger_sprites.append(pygame.image.load(sprite_path).convert_alpha())
+    except FileNotFoundError:
+        print(f"Sprite pas trouvé")
+        charger_sprites.append(None)  # erreur qui ne devrait pas arriver
 
 for i in range(3):
     sprite_path = os.path.join(script_dir, "sprites", f"pooter_{i}.png")
@@ -75,12 +140,15 @@ for i in range(3):
         print(f"Sprite pas trouvé")
         pooter_sprites.append(None)  # erreur qui ne devrait pas arriver 
 
-
+ 
 # Scale a 64 pixels
 obstacle_sprites = [pygame.transform.scale(sprite, (64, 64)) for sprite in obstacle_sprites]
 fly_sprites = [pygame.transform.scale(sprite, (48, 48)) for sprite in fly_sprites]
 pooter_sprites = [pygame.transform.scale(sprite, (64, 64)) for sprite in pooter_sprites]
 spider_sprites = [pygame.transform.scale(sprite, (48, 48)) for sprite in spider_sprites]
+charger_sprites = [pygame.transform.scale(sprite, (64, 64)) for sprite in charger_sprites]
+boss_sprites = [pygame.transform.scale(sprite, (172, 172)) for sprite in boss_sprites]
+
 
 DEVIL_ITEMS = [
     ("pacte_sang", "Dégâts x2, -2 Coeurs"),
@@ -101,7 +169,7 @@ def start_screen():
     font_large = pygame.font.SysFont("Arial", 64)
     font_small = pygame.font.SysFont("Arial", 32)
 
-    title = font_large.render("Binding Of Pygame", True, RED)
+    title = font_large.render("Caac", True, RED)
     start_text = font_small.render("Appuyez sur ENTRÉE pour Commencer", True, WHITE)
     controls_text = font_small.render("Flèches pour Tirer, WASD pour Bouger", True, WHITE)
     controls_text = font_small.render("Espace pour esquiver", True, WHITE)
@@ -152,7 +220,7 @@ class Isaac:
         self.laser = False
         self.flying = False
         self.holy_aura = False
-        self.aura_damage = 2
+        self.aura_damage = 1
         self.regen = False
         self.holy_triple = False
         self.laser_damage = 2
@@ -164,12 +232,32 @@ class Isaac:
         self.dash_cooldown = 0
         self.dash_duration = 10  # Frames
         self.is_dashing = False
+        self.current_state = "idle"
+        self.current_direction = "down"
+        self.current_frame = 0
+        self.animation_timer = 0
+        self.animation_speed = 10  # Higher = slower animation
+        self.was_moving = False
+
 
     def draw(self):
         # Draw Isaac
-        pygame.draw.circle(screen, BEIGE, (int(self.x), int(self.y)), self.size)
-        pygame.draw.circle(screen, BLACK, (int(self.x - 8), int(self.y - 5)), 4)
-        pygame.draw.circle(screen, BLACK, (int(self.x + 8), int(self.y - 5)), 4)
+        try:
+            # Get current animation frames
+            frames = isaac_sprites[self.current_state][self.current_direction]
+            # Ensure current_frame is within bounds
+            self.current_frame = min(self.current_frame, len(frames) - 1)
+            sprite = frames[self.current_frame]
+            
+            # Draw the sprite
+            if sprite:
+                sprite_rect = sprite.get_rect(center=(int(self.x), int(self.y)))
+                screen.blit(sprite, sprite_rect)
+                
+        except Exception as e:
+            print(f"Error drawing sprite: {e}")
+            # Fallback drawing
+            pygame.draw.circle(screen, (255, 0, 255), (int(self.x), int(self.y)), self.size)
 
         # Draw laser si actif et tire
         if self.laser and self.shooting:
@@ -230,6 +318,8 @@ class Isaac:
 
                 # Triple tir
                 if self.triple_shot:
+                    pygame.mixer.Sound.play(tripleshoot_sound)
+                    pygame.mixer.music.stop()
                     self.tears.append(Tear(self.x, self.y, dx * tear_speed, dy * tear_speed, self.damage, properties))
 
                     # Calculer angles pour les tears gauches droites
@@ -254,10 +344,14 @@ class Isaac:
                     ))
                 else:
                     # Single tir
+                    pygame.mixer.Sound.play(shoot_sound)
+                    pygame.mixer.music.stop()
                     self.tears.append(Tear(self.x, self.y, dx * tear_speed, dy * tear_speed, self.damage, properties))
 
                 # Eparpillement (jsp comment dire en francais)
                 if self.scatter:
+                    pygame.mixer.Sound.play(scattershoot_sound)
+                    pygame.mixer.music.stop()
                     for _ in range(3):
                         scatter_angle = random.uniform(0, 2 * math.pi)
                         scatter_speed = tear_speed * 0.6
@@ -281,7 +375,44 @@ class Isaac:
         keys = pygame.key.get_pressed()
 
         # Reset vitesse
-        self.dx, self.dy = 0, 0
+        self.is_moving = (self.dx != 0 or self.dy != 0)
+        
+        # Update state
+        is_moving = (abs(self.dx) > 0.1 or abs(self.dy) > 0.1)  # Small threshold
+
+        # State transitions
+        if is_moving:
+            self.current_state = "walk"
+            # Update direction based on primary movement axis
+            if abs(self.dy) > abs(self.dx):  # Vertical movement dominant
+                self.current_direction = "down" if self.dy > 0 else "up"
+            else:  # Horizontal movement dominant
+                self.current_direction = "right" if self.dx > 0 else "left"
+        else:
+            self.current_state = "idle"
+
+        # Animation frame updates
+        self.animation_timer += 1
+        
+        # Only change frames when appropriate
+        if self.animation_timer >= self.animation_speed:
+            self.animation_timer = 0
+            frames = isaac_sprites[self.current_state][self.current_direction]
+            
+            # For walk animation, cycle through frames
+            if self.current_state == "walk":
+                self.current_frame = (self.current_frame + 1) % len(frames)
+            # For idle, stay on first frame (or cycle if you have multiple idle frames)
+            else:
+                self.current_frame = 0
+
+        # Reset animation when state changes
+        if is_moving != self.was_moving:
+            self.current_frame = 0
+            self.animation_timer = 0
+            
+        self.was_moving = is_moving
+        
 
         # Update vitesse modifier pour clavier azerty
         if keys[pygame.K_a]: self.dx = -1
@@ -472,22 +603,24 @@ class Enemy:
         self.max_speed = 8  # Cap pour vitesse maximum
         self.speed = min(self.base_speed * 0.5 + (floor_level * 0.3), self.max_speed) if enemy_type == "boss" else self.base_speed
         self.projectiles = []
-        self.shoot_cooldown = 60
+        self.shoot_cooldown = 120
         self.charge_cooldown = 180
         self.charge_timer = 0
-        self.charging = False
+        self.charging = False   
         self.sprites = fly_sprites 
         self.sprites0 = spider_sprites
         self.sprites1 = pooter_sprites
+        self.sprites3 = charger_sprites 
+        self.sprites4 = boss_sprites 
         self.current_frame = 0      # initial
         self.animation_speed = 7    # vitesse animation /!\ plus haut = moins vite
         self.frame_counter = 0      # compteur
         if enemy_type == "boss":
-            self.shoot_delay = 400
+            self.shoot_delay = 320
             self.spawn_timer = 200
             self.spawn_cooldown = 200
         else:
-            self.shoot_delay = 120
+            self.shoot_delay = 240
         self.size = 20 if enemy_type != "boss" else 30
         self.floor_level = floor_level
 
@@ -505,13 +638,13 @@ class Enemy:
                 sprite_width, sprite_height = self.sprites1[self.current_frame].get_size()
                 screen.blit(self.sprites1[self.current_frame], (self.x - sprite_width // 2, self.y - sprite_height // 2))
         elif self.type == 'charger':
-            color = (255, 165, 0) if self.charging else (200, 50, 50)
-            pygame.draw.rect(screen, color, (self.x-self.size, self.y-self.size, self.size*2, self.size*2))
+            if self.sprites3[self.current_frame]: 
+                sprite_width, sprite_height = self.sprites3[self.current_frame].get_size()
+                screen.blit(self.sprites3[self.current_frame], (self.x - sprite_width // 2, self.y - sprite_height // 2))
         if self.type == "boss":
-            size_mult = min(2.5, 1 + (self.health / 200))
-            pygame.draw.circle(screen, BLACK, (int(self.x), int(self.y)), int(self.size * size_mult) + 2)
-            pygame.draw.circle(screen, RED, (int(self.x), int(self.y)), int(self.size * size_mult))
-
+            if self.sprites4[0]: 
+                sprite_width, sprite_height = self.sprites4[0].get_size()
+                screen.blit(self.sprites4[0], (self.x - sprite_width // 2, self.y - sprite_height // 2))
     def update(self):
         if self.type == "fly":
             self.frame_counter += 0.5
@@ -519,7 +652,7 @@ class Enemy:
                 self.frame_counter = 0
                 self.current_frame = (self.current_frame + 1) % len(self.sprites)
         if self.type == "pooter":
-            self.frame_counter += 0.25
+            self.frame_counter += 0.10
             if self.frame_counter >= self.animation_speed:
                 self.frame_counter = 0
                 self.current_frame = (self.current_frame + 1) % len(self.sprites1)
@@ -529,11 +662,18 @@ class Enemy:
                 self.frame_counter = 0
                 self.current_frame = (self.current_frame + 1) % len(self.sprites0)
         if self.shoot_cooldown > 0:
-            self.shoot_cooldown -= 1
+            self.shoot_cooldown -= 1                                                                
+            self.current_frame = (self.current_frame + 1) % len(self.sprites1)
         if self.type == 'charger':
             if self.charge_timer > 0:
+                self.frame_counter = 0
                 self.charge_timer -= 1
         if self.type == "boss":
+            if len(self.sprites4) > 0:
+                self.frame_counter += 1
+                if self.frame_counter >= self.animation_speed:
+                    self.frame_counter = 0
+                    self.current_frame = (self.current_frame + 1) % len(self.sprites4)
             if self.spawn_timer > 0:
                 self.spawn_timer -= 1
 
@@ -546,7 +686,7 @@ class Enemy:
         elif self.type == "spider":
             if random.randint(0, 100) < 5:  # 5% de changer de direction
                 angle = math.atan2(target_y - self.y, target_x - self.x)
-                self.x += math.cos(angle) * self.speed * 5
+                self.x += math.cos(angle) * self.speed  * 5
                 self.y += math.sin(angle) * self.speed * 5
         if self.type == "pooter":
             if self.shoot_cooldown <= 0:
@@ -554,11 +694,15 @@ class Enemy:
                 self.shoot_cooldown = self.shoot_delay
         if self.type == 'charger':
             if not self.charging and self.charge_timer <= 0:
+                self.current_frame = 0
                 if random.random() < 0.005:
+                    self.current_frame = 1
                     self.charging = True
                     self.speed *= 3
-                    self.charge_timer = 60
+                    self.charge_timer = 30
+
             if self.charging:
+                self.current_frame = 2
                 angle = math.atan2(target_y - self.y, target_x - self.x)
                 self.x += math.cos(angle) * self.speed
                 self.y += math.sin(angle) * self.speed
@@ -1074,7 +1218,7 @@ def main():
                     if event.key == pygame.K_KP7 or event.key == pygame.K_7:
                         isaac.homing = True
                     if event.key == pygame.K_KP8 or event.key == pygame.K_8:
-                        isaac.explosive = True
+                        isaac.scattera = True
                     if event.key == pygame.K_KP9 or event.key == pygame.K_9:
                         isaac.spectral = True
                     if event.key == pygame.K_KP0 or event.key == pygame.K_0:
@@ -1140,8 +1284,7 @@ def main():
                     isaac.health -= 1
                     isaac.invincibility_frames = isaac.invincibility_duration
                     if isaac.health <= 0:
-                        game_over = True  # Set game_over to True when health <= 0
-                        print("Game Over! Health reached 0.")  # Debug print
+                        game_over = True
         # blabla treasure room
         if current_room.type == "treasure" and current_room.items:
             if math.dist((isaac.x, isaac.y), (WIDTH // 2, HEIGHT // 2)) < 30:
@@ -1430,7 +1573,7 @@ def main():
                 "5: Brimstone",
                 "6: Triple Tir",
                 "7: Tirs Guidés",
-                "8: Tirs Explosifs",
+                "8: Tirs éparpillés",
                 "9: Tirs Spectraux",
                 "0: Vider Salle",
             ]
