@@ -143,7 +143,7 @@ for i in range(3):
  
 # Scale a 64 pixels
 obstacle_sprites = [pygame.transform.scale(sprite, (64, 64)) for sprite in obstacle_sprites]
-fly_sprites = [pygame.transform.scale(sprite, (48, 48)) for sprite in fly_sprites]
+fly_sprites = [pygame.transform.scale(sprite, (54, 54)) for sprite in fly_sprites]
 pooter_sprites = [pygame.transform.scale(sprite, (64, 64)) for sprite in pooter_sprites]
 spider_sprites = [pygame.transform.scale(sprite, (48, 48)) for sprite in spider_sprites]
 charger_sprites = [pygame.transform.scale(sprite, (64, 64)) for sprite in charger_sprites]
@@ -152,7 +152,6 @@ boss_sprites = [pygame.transform.scale(sprite, (172, 172)) for sprite in boss_sp
 
 DEVIL_ITEMS = [
     ("pacte_sang", "Dégâts x2, -2 Coeurs"),
-    ("brimstone", "Laser Démoniaque, -3 Coeurs"),
     ("abaddon", "Vitesse et Dégâts ++, -2 Coeurs"),
     ("pentagram", "Toutes Stats ++, -1 Coeur")
 ]
@@ -199,8 +198,8 @@ class Isaac:
         self.size = 25
         self.health = 6  # 3 coeurs, 1 = un demi coeur
         self.max_health = 6
-        self.damage = 4
-        self.fire_rate = 0.5
+        self.damage = 5
+        self.fire_rate = 0.7
         self.speed = 3
         self.tears = []
         self.shoot_delay = 15
@@ -975,8 +974,6 @@ class Room:
                 #prix correct selon l'objet
                 if item == "pacte_sang":
                     self.prices.append(2)  # 2 cours (4 points de vie)
-                elif item == "brimstone":
-                    self.prices.append(3)   # 3 coeurs (6 points)
                 elif item == "abaddon":
                     self.prices.append(2)
                 elif item == "pentagram":
@@ -1212,7 +1209,7 @@ def main():
                     if event.key == pygame.K_KP4 or event.key == pygame.K_4:
                         isaac.fire_rate += 1
                     if event.key == pygame.K_KP5 or event.key == pygame.K_5:
-                        isaac.laser = True
+                        isaac.holy_aura = True
                     if event.key == pygame.K_KP6 or event.key == pygame.K_6:
                         isaac.triple_shot = True
                     if event.key == pygame.K_KP7 or event.key == pygame.K_7:
@@ -1407,9 +1404,6 @@ def main():
                             if item == "pacte_sang":
                                 isaac.damage *= 1.5
                                 isaac.pickup_text = "Dégats x1.5!"
-                            elif item == "brimstone":
-                                isaac.laser = True
-                                isaac.pickup_text = "Laser démoniaque!"
                             elif item == "abaddon":
                                 isaac.speed += 1
                                 isaac.damage += 2
@@ -1489,6 +1483,8 @@ def main():
                         if isaac.invincibility_frames <= 0:
                             isaac.health -= 1
                             isaac.invincibility_frames = isaac.invincibility_duration
+                        if isaac.health <= 0:
+                            game_over = True
                         enemy.projectiles.remove(projectile)
 
             if enemy.type == "boss":
@@ -1570,7 +1566,7 @@ def main():
                 "2: Dégâts +",
                 "3: +50 Pièces",
                 "4: Cadence +",
-                "5: Brimstone",
+                "5: Aura sacré",
                 "6: Triple Tir",
                 "7: Tirs Guidés",
                 "8: Tirs éparpillés",
