@@ -196,8 +196,8 @@ class Isaac:
         self.x = WIDTH // 2
         self.y = HEIGHT // 2
         self.size = 25
-        self.health = 6  # 3 coeurs, 1 = un demi coeur
-        self.max_health = 6
+        self.health = 8  # 4 coeurs, 1 = un demi coeur
+        self.max_health = 8
         self.damage = 5
         self.fire_rate = 0.7
         self.speed = 3
