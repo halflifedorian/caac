@@ -66,7 +66,7 @@ isaac_sprites = {
     }
 }
 
-# Load sprites with error handling
+# Chargement des sprites
 def load_sprite_frames(base_name, directions, frame_count):
     frames = {}
     for direction in directions:
@@ -78,7 +78,7 @@ def load_sprite_frames(base_name, directions, frame_count):
                 frames[direction].append(pygame.transform.scale(sprite, (80, 80)))
             except (FileNotFoundError, pygame.error) as e:
                 print(f"Error loading {base_name}_{direction}_{i}.png: {e}")
-                # Fallback - create a colored rectangle so we can see missing sprites
+                # Fallback
                 surf = pygame.Surface((50, 50), pygame.SRCALPHA)
                 color = (255, 0, 255) if direction == "up" else \
                         (0, 255, 255) if direction == "down" else \
@@ -88,10 +88,8 @@ def load_sprite_frames(base_name, directions, frame_count):
                 frames[direction].append(surf)
     return frames
 
-# Load idle (1 frame per direction)
 isaac_sprites["idle"] = load_sprite_frames("isaac_idle", ["up", "down", "left", "right"], 1)
 
-# Load walk (3 frames per direction)
 isaac_sprites["walk"] = load_sprite_frames("isaac_walk", ["up", "down", "left", "right"], 2)
 sprite_path = os.path.join(script_dir, "sprites", "obstacle.png")
 try:
